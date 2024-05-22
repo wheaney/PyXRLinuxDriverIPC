@@ -16,6 +16,13 @@ SBS_MODE_VALUES = ['unset', 'enable', 'disable']
 MANAGED_EXTERNAL_MODES = ['virtual_display', 'sideview', 'none']
 VR_LITE_OUTPUT_MODES = ['mouse', 'joystick']
 
+# helps determine whether a period is an upgrade
+PERIOD_RANK = {
+    'monthly': 1,
+    'yearly': 2,
+    'lifetime': 3
+}
+
 def parse_boolean(value, default):
     if not value:
         return default
@@ -284,18 +291,22 @@ class XRDriverIPC:
         tiers = {}
         for key, value in license['tiers'].items():
             is_active = value.get('active') == True
+            active_period = value.get('activePeriodType') if is_active else None
+            funds_needed = value.get('fundsNeededByPeriod')
             tiers[key] = {
-                'active_period': value.get('activePeriodType') if is_active else None,
-                'funds_needed_by_period': value.get('fundsNeededByPeriod')
+                'active_period': active_period,
+                'funds_needed_by_period': funds_needed
             }
 
             end_date = value.get('endDate')
             if is_active and end_date is not None:
-                time_remaining = self._seconds_remaining(end_date)
-                if (time_remaining > 0):
-                    tiers[key]['funds_needed_in_seconds'] = time_remaining
-                else:
-                    tiers[key]['active_period'] = None
+                active_period_funds_needed = funds_needed.get(active_period)
+                if active_period_funds_needed is not None and active_period_funds_needed != 0:
+                    time_remaining = self._seconds_remaining(end_date)
+                    if (time_remaining > 0):
+                        tiers[key]['funds_needed_in_seconds'] = time_remaining
+                    else:
+                        tiers[key]['active_period'] = None
 
         return tiers
 
