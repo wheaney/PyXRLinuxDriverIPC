@@ -258,7 +258,7 @@ class XRDriverIPC:
                             license_view['tiers'] = self._license_tiers_view(license_json)
                             license_view['features'] = self._license_features_view(license_json)
                             license_view['hardware_id'] = license_json['hardwareId']
-                            license_view['confirmed_token'] = license_json['confirmedToken']
+                            license_view['confirmed_token'] = license_json.get('confirmedToken') == True
                             action_needed = self._license_action_needed_details(license_view)
                             license_view['action_needed'] = {
                                 'seconds': action_needed[0],
@@ -279,7 +279,7 @@ class XRDriverIPC:
             }
 
         return state
-    
+
     def _license_tiers_view(self, license):
         tiers = {}
         for key, value in license['tiers'].items():
@@ -288,7 +288,7 @@ class XRDriverIPC:
                 'active_period': value.get('activePeriodType') if is_active else None,
                 'funds_needed_by_period': value.get('fundsNeededByPeriod')
             }
-            
+
             end_date = value.get('endDate')
             if is_active and end_date is not None:
                 time_remaining = self._seconds_remaining(end_date)
@@ -298,7 +298,7 @@ class XRDriverIPC:
                     tiers[key]['active_period'] = None
 
         return tiers
-    
+
     def _license_features_view(self, license):
         features = {}
         for key, value in license['features'].items():
@@ -317,7 +317,7 @@ class XRDriverIPC:
                     features[key]['is_enabled'] = False
 
         return features
-    
+
     # returns the earliest of the funds_needed_in_seconds values from the tiers and features
     def _license_action_needed_details(self, license_view):
         min_funds_needed_date = None
@@ -330,12 +330,12 @@ class XRDriverIPC:
                     if active_period_funds_needed is not None and active_period_funds_needed != 0 and \
                         (min_funds_needed is None or active_period_funds_needed < min_funds_needed):
                         min_funds_needed = active_period_funds_needed
-            
+
         for feature in license_view['features'].values():
             if 'funds_needed_in_seconds' in feature:
-                if min_funds_needed_date is None or tier['funds_needed_in_seconds'] < min_funds_needed_date:
-                    min_funds_needed_date = tier['funds_needed_in_seconds']
-            
+                if min_funds_needed_date is None or feature['funds_needed_in_seconds'] < min_funds_needed_date:
+                    min_funds_needed_date = feature['funds_needed_in_seconds']
+
         return [min_funds_needed_date, min_funds_needed]
 
     def _seconds_remaining(self, date_seconds):
