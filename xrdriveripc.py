@@ -234,7 +234,7 @@ class XRDriverIPC:
         state['sbs_mode_enabled'] = False
         state['sbs_mode_supported'] = False
         state['firmware_update_recommended'] = False
-        state['device_license'] = {}
+        state['ui_view'] = {}
         state['breezy_desktop_smooth_follow_enabled'] = False
 
         try:
@@ -253,22 +253,102 @@ class XRDriverIPC:
                         elif key in ['sbs_mode_enabled', 'sbs_mode_supported', 'firmware_update_recommended', 'breezy_desktop_smooth_follow_enabled']:
                             state[key] = parse_boolean(value, False)
                         elif key == 'device_license':
-                            state[key] = json.loads(value)
+                            license_json = json.loads(value)
+                            license_view = {}
+                            license_view['tiers'] = self._license_tiers_view(license_json)
+                            license_view['features'] = self._license_features_view(license_json)
+                            license_view['hardware_id'] = license_json['hardwareId']
+                            license_view['confirmed_token'] = license_json.get('confirmedToken') == True
+                            license_view['action_needed'] = self._license_action_needed_details(license_view)
+
+                            state['ui_view']['license'] = license_view
                     except Exception as e:
                         self.logger.error(f"Error parsing key-value pair {key}={value}: {e}")
         except FileNotFoundError:
             pass
 
-        # state is stale, just send the license
+        # state is stale, just send the ui_view
         if state['heartbeat'] == 0 or (time.time() - state['heartbeat']) > 5:
             return {
                 'heartbeat': state['heartbeat'],
-                'device_license': state['device_license']
+                'ui_view': state['ui_view']
             }
 
         return state
 
-    async def request_token(self, email):
+    def _license_tiers_view(self, license):
+        tiers = {}
+        for key, value in license['tiers'].items():
+            is_active = value.get('active') == True
+            active_period = value.get('activePeriodType') if is_active else None
+            funds_needed = value.get('fundsNeededByPeriod')
+            tiers[key] = {
+                'active_period': active_period,
+                'funds_needed_by_period': funds_needed
+            }
+
+            end_date = value.get('endDate')
+            if is_active and end_date is not None:
+                active_period_funds_needed = funds_needed.get(active_period)
+                if active_period_funds_needed is not None and active_period_funds_needed != 0:
+                    time_remaining = self._seconds_remaining(end_date)
+                    if (time_remaining > 0):
+                        tiers[key]['funds_needed_in_seconds'] = time_remaining
+                    else:
+                        tiers[key]['active_period'] = None
+
+        return tiers
+
+    def _license_features_view(self, license):
+        features = {}
+        for key, value in license['features'].items():
+            is_enabled = value['status'] != 'off'
+            features[key] = {
+                'is_enabled': is_enabled,
+                'is_trial': value['status'] == 'trial'
+            }
+
+            end_date = value.get('endDate')
+            if is_enabled and end_date is not None:
+                time_remaining = self._seconds_remaining(end_date)
+                if (time_remaining > 0):
+                    features[key]['funds_needed_in_seconds'] = time_remaining
+                else:
+                    features[key]['is_enabled'] = False
+
+        return features
+
+    # returns the earliest of the funds_needed_in_seconds values from the tiers and features
+    def _license_action_needed_details(self, license_view):
+        min_funds_needed_date = None
+        min_funds_needed = None
+        for tier in license_view['tiers'].values():
+            if 'funds_needed_in_seconds' in tier:
+                if min_funds_needed_date is None or tier['funds_needed_in_seconds'] < min_funds_needed_date:
+                    min_funds_needed_date = tier['funds_needed_in_seconds']
+                    active_period_funds_needed = tier['funds_needed_by_period'].get(tier['active_period'])
+                    if active_period_funds_needed is not None and active_period_funds_needed != 0 and \
+                        (min_funds_needed is None or active_period_funds_needed < min_funds_needed):
+                        min_funds_needed = active_period_funds_needed
+
+        for feature in license_view['features'].values():
+            if 'funds_needed_in_seconds' in feature:
+                if min_funds_needed_date is None or feature['funds_needed_in_seconds'] < min_funds_needed_date:
+                    min_funds_needed_date = feature['funds_needed_in_seconds']
+
+        return {
+            'seconds': min_funds_needed_date,
+            'funds_needed_usd': min_funds_needed
+        } if min_funds_needed_date is not None else None
+
+    def _seconds_remaining(self, date_seconds):
+        if not date_seconds:
+            return None
+
+        return date_seconds - time.time()
+
+
+    def request_token(self, email):
         self.logger.info(f"Requesting a new token for {email}")
 
         # Set the USER environment variable for this command
@@ -282,7 +362,7 @@ class XRDriverIPC:
             self.logger.error(f"Error running config script {exc.output}")
             return False
 
-    async def verify_token(self, token):
+    def verify_token(self, token):
         self.logger.info(f"Verifying token {token}")
 
         # Set the USER environment variable for this command
