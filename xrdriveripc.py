@@ -16,13 +16,6 @@ SBS_MODE_VALUES = ['unset', 'enable', 'disable']
 MANAGED_EXTERNAL_MODES = ['virtual_display', 'sideview', 'none']
 VR_LITE_OUTPUT_MODES = ['mouse', 'joystick']
 
-# helps determine whether a period is an upgrade
-PERIOD_RANK = {
-    'monthly': 1,
-    'yearly': 2,
-    'lifetime': 3
-}
-
 def parse_boolean(value, default):
     if not value:
         return default
@@ -266,11 +259,7 @@ class XRDriverIPC:
                             license_view['features'] = self._license_features_view(license_json)
                             license_view['hardware_id'] = license_json['hardwareId']
                             license_view['confirmed_token'] = license_json.get('confirmedToken') == True
-                            action_needed = self._license_action_needed_details(license_view)
-                            license_view['action_needed'] = {
-                                'seconds': action_needed[0],
-                                'funds_needed_usd': action_needed[1]
-                            }
+                            license_view['action_needed'] = self._license_action_needed_details(license_view)
 
                             state['ui_view']['license'] = license_view
                     except Exception as e:
@@ -347,7 +336,10 @@ class XRDriverIPC:
                 if min_funds_needed_date is None or feature['funds_needed_in_seconds'] < min_funds_needed_date:
                     min_funds_needed_date = feature['funds_needed_in_seconds']
 
-        return [min_funds_needed_date, min_funds_needed]
+        return {
+            'seconds': min_funds_needed_date,
+            'funds_needed_usd': min_funds_needed
+        } if min_funds_needed_date is not None else None
 
     def _seconds_remaining(self, date_seconds):
         if not date_seconds:
@@ -356,7 +348,7 @@ class XRDriverIPC:
         return date_seconds - time.time()
 
 
-    async def request_token(self, email):
+    def request_token(self, email):
         self.logger.info(f"Requesting a new token for {email}")
 
         # Set the USER environment variable for this command
@@ -370,7 +362,7 @@ class XRDriverIPC:
             self.logger.error(f"Error running config script {exc.output}")
             return False
 
-    async def verify_token(self, token):
+    def verify_token(self, token):
         self.logger.info(f"Verifying token {token}")
 
         # Set the USER environment variable for this command
