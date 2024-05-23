@@ -1,9 +1,7 @@
 import json
 import os
-import pwd
 import requests
 import stat
-import subprocess
 import time
 
 # write-only file that the driver reads (but never writes) to get user-specified control flags
