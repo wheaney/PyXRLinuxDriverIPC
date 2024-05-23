@@ -1,6 +1,7 @@
 import json
 import os
 import pwd
+import requests
 import stat
 import subprocess
 import time
@@ -15,6 +16,8 @@ CONTROL_FLAGS = ['recenter_screen', 'recalibrate', 'sbs_mode', 'refresh_device_l
 SBS_MODE_VALUES = ['unset', 'enable', 'disable']
 MANAGED_EXTERNAL_MODES = ['virtual_display', 'sideview', 'none']
 VR_LITE_OUTPUT_MODES = ['mouse', 'joystick']
+
+TOKENS_ENDPOINT="https://eu.driver-backend.xronlinux.com/tokens/v1"
 
 def parse_boolean(value, default):
     if not value:
@@ -69,6 +72,10 @@ class XRDriverIPC:
     _instance = None
 
     @staticmethod
+    def set_instance(ipc):
+        XRDriverIPC._instance = ipc
+
+    @staticmethod
     def get_instance():
         if not XRDriverIPC._instance:
             XRDriverIPC._instance = XRDriverIPC()
@@ -78,10 +85,8 @@ class XRDriverIPC:
     def __init__(self, logger=Logger(), user=None, user_home=None):
         self.breezy_installed = False
         self.breezy_installing = False
-        self.user = user if user else pwd.getpwuid( os.getuid() )[0]
         self.user_home = user_home if user_home else os.path.expanduser("~")
         self.config_file_path = os.path.join(self.user_home, ".xreal_driver_config")
-        self.config_script_path = os.path.join(self.user_home, "bin/xreal_driver_config")
         self.logger = logger
 
     def retrieve_config(self, include_ui_view = True):
@@ -227,6 +232,7 @@ class XRDriverIPC:
     def retrieve_driver_state(self):
         state = {}
         state['heartbeat'] = 0
+        state['hardware_id'] = None
         state['connected_device_brand'] = None
         state['connected_device_model'] = None
         state['calibration_setup'] = "AUTOMATIC"
@@ -248,7 +254,7 @@ class XRDriverIPC:
                         key, value = line.strip().split('=')
                         if key == 'heartbeat':
                             state[key] = parse_int(value, 0)
-                        elif key in ['calibration_setup', 'calibration_state', 'connected_device_brand', 'connected_device_model']:
+                        elif key in ['hardware_id', 'calibration_setup', 'calibration_state', 'connected_device_brand', 'connected_device_model']:
                             state[key] = value
                         elif key in ['sbs_mode_enabled', 'sbs_mode_supported', 'firmware_update_recommended', 'breezy_desktop_smooth_follow_enabled']:
                             state[key] = parse_boolean(value, False)
@@ -265,12 +271,14 @@ class XRDriverIPC:
                     except Exception as e:
                         self.logger.error(f"Error parsing key-value pair {key}={value}: {e}")
         except FileNotFoundError:
+            self.logger.error(f"Could not find state file at {DRIVER_STATE_FILE_PATH}")
             pass
 
         # state is stale, just send the ui_view
         if state['heartbeat'] == 0 or (time.time() - state['heartbeat']) > 5:
             return {
                 'heartbeat': state['heartbeat'],
+                'hardware_id': state['hardware_id'],
                 'ui_view': state['ui_view']
             }
 
@@ -351,28 +359,48 @@ class XRDriverIPC:
     def request_token(self, email):
         self.logger.info(f"Requesting a new token for {email}")
 
-        # Set the USER environment variable for this command
-        env_copy = os.environ.copy()
-        env_copy["USER"] = self.user
+        state = self.retrieve_driver_state()
+        if state['hardware_id'] is not None:
+            requestbody = json.dumps({"hardwareId": state['hardware_id'], "email": email})
 
-        try:
-            output = subprocess.check_output([self.config_script_path, "--request-token", email], stderr=subprocess.STDOUT, env=env_copy)
-            return output.strip() == b"Token request sent"
-        except subprocess.CalledProcessError as exc:
-            self.logger.error(f"Error running config script {exc.output}")
-            return False
+            try:
+                response = requests.post(TOKENS_ENDPOINT, headers={"Content-Type": "application/json"}, data=requestbody)
+                response.raise_for_status()
+                message = response.json().get("message", "")
+                if message:
+                    success = message == "Token request sent"
+                    if not success: self.logger.error(f"Received error from driver backend: {message}")
+                    return success
+                else:
+                    self.logger.error("No message found in the response")
+            except Exception as e:
+                self.logger.error(f"Error: {e}")
+        else:
+            self.logger.error('hardware_id not found in driver state')
+
+        return False
 
     def verify_token(self, token):
         self.logger.info(f"Verifying token {token}")
 
-        # Set the USER environment variable for this command
-        env_copy = os.environ.copy()
-        env_copy["USER"] = self.user
+        state = self.retrieve_driver_state()
+        if state['hardware_id'] is not None:
+            requestbody = json.dumps({"hardwareId": state['hardware_id'], "token": token})
 
-        try:
-            output = subprocess.check_output([self.config_script_path, "--verify-token", token], stderr=subprocess.STDOUT, env=env_copy)
-            return output.strip() == b"Token verified"
-        except subprocess.CalledProcessError as exc:
-            self.logger.error(f"Error running config script {exc.output}")
-            return False
+            try:
+                response = requests.put(TOKENS_ENDPOINT, headers={"Content-Type": "application/json"}, data=requestbody)
+                response.raise_for_status()
+                message = response.json().get("message", "")
+                if message:
+                    success = message == "Token verified"
+                    if not success: self.logger.error(f"Received error from driver backend: {message}")
+                    return success
+                else:
+                    self.logger.error("No message found in the response")
+            except Exception as e:
+                self.logger.error(f"Error: {e}")
+        else:
+            self.logger.error('hardware_id not found in driver state')
+
+        return False
 
