@@ -365,7 +365,7 @@ class XRDriverIPC:
 
             try:
                 response = requests.post(TOKENS_ENDPOINT, headers={"Content-Type": "application/json"}, data=requestbody)
-                response.raise_for_status()
+                if response.status_code not in [200, 400]: response.raise_for_status()
                 message = response.json().get("message", "")
                 if message:
                     success = message == "Token request sent"
@@ -389,7 +389,7 @@ class XRDriverIPC:
 
             try:
                 response = requests.put(TOKENS_ENDPOINT, headers={"Content-Type": "application/json"}, data=requestbody)
-                response.raise_for_status()
+                if response.status_code not in [200, 400]: response.raise_for_status()
                 message = response.json().get("message", "")
                 if message:
                     success = message == "Token verified"
