@@ -264,6 +264,7 @@ class XRDriverIPC:
                             license_view['hardware_id'] = license_json['hardwareId']
                             license_view['confirmed_token'] = license_json.get('confirmedToken') == True
                             license_view['action_needed'] = self._license_action_needed_details(license_view)
+                            license_view['enabled_features'] = self._license_enabled_features(license_view)
 
                             state['ui_view']['license'] = license_view
                     except Exception as e:
@@ -323,6 +324,9 @@ class XRDriverIPC:
                     features[key]['is_enabled'] = False
 
         return features
+    
+    def _license_enabled_features(self, license_view):
+        return [key for key, value in license_view['features'].items() if value.get('is_enabled')]
 
     # returns the earliest of the funds_needed_in_seconds values from the tiers and features
     def _license_action_needed_details(self, license_view):
