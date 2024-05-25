@@ -241,6 +241,7 @@ class XRDriverIPC:
         state['sbs_mode_enabled'] = False
         state['sbs_mode_supported'] = False
         state['firmware_update_recommended'] = False
+        state['device_license'] = {}
         state['ui_view'] = {}
         state['breezy_desktop_smooth_follow_enabled'] = False
 
