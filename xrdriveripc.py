@@ -1,8 +1,10 @@
+import http
 import json
 import os
-import requests
+import ssl
 import stat
 import time
+import urllib.request
 
 # write-only file that the driver reads (but never writes) to get user-specified control flags
 CONTROL_FLAGS_FILE_PATH = '/dev/shm/xr_driver_control'
@@ -80,12 +82,13 @@ class XRDriverIPC:
 
         return XRDriverIPC._instance
 
-    def __init__(self, logger=Logger(), user=None, user_home=None):
+    def __init__(self, logger=Logger(), user_home=None):
         self.breezy_installed = False
         self.breezy_installing = False
         self.user_home = user_home if user_home else os.path.expanduser("~")
         self.config_file_path = os.path.join(self.user_home, ".xreal_driver_config")
         self.logger = logger
+        self.request_context = ssl._create_unverified_context()
 
     def retrieve_config(self, include_ui_view = True):
         config = {}
@@ -258,6 +261,8 @@ class XRDriverIPC:
                             state[key] = parse_boolean(value, False)
                         elif key == 'device_license':
                             license_json = json.loads(value)
+                            state['device_license'] = license_json
+
                             license_view = {}
                             license_view['tiers'] = self._license_tiers_view(license_json)
                             license_view['features'] = self._license_features_view(license_json)
@@ -278,6 +283,7 @@ class XRDriverIPC:
             return {
                 'heartbeat': state['heartbeat'],
                 'hardware_id': state['hardware_id'],
+                'device_license': state['device_license'],
                 'ui_view': state['ui_view']
             }
 
@@ -366,9 +372,12 @@ class XRDriverIPC:
             requestbody = json.dumps({"hardwareId": state['hardware_id'], "email": email})
 
             try:
-                response = requests.post(TOKENS_ENDPOINT, headers={"Content-Type": "application/json"}, data=requestbody)
-                if response.status_code not in [200, 400]: response.raise_for_status()
-                message = response.json().get("message", "")
+                req = urllib.request.Request(TOKENS_ENDPOINT, method="POST", headers={"Content-Type": "application/json"}, data=requestbody.encode())
+                response = urllib.request.urlopen(req, context=self.request_context)
+                if response.status not in [http.client.OK, http.client.BAD_REQUEST]:
+                    raise Exception(f"Received status code {response.status}")
+                
+                message = json.loads(response.read().decode()).get("message", "")
                 if message:
                     success = message == "Token request sent"
                     if not success: self.logger.error(f"Received error from driver backend: {message}")
@@ -390,9 +399,12 @@ class XRDriverIPC:
             requestbody = json.dumps({"hardwareId": state['hardware_id'], "token": token})
 
             try:
-                response = requests.put(TOKENS_ENDPOINT, headers={"Content-Type": "application/json"}, data=requestbody)
-                if response.status_code not in [200, 400]: response.raise_for_status()
-                message = response.json().get("message", "")
+                req = urllib.request.Request(TOKENS_ENDPOINT, method="PUT", headers={"Content-Type": "application/json"}, data=requestbody.encode())
+                response = urllib.request.urlopen(req, context=self.request_context)
+                if response.status not in [http.client.OK, http.client.BAD_REQUEST]:
+                    raise Exception(f"Received status code {response.status}")
+                
+                message = json.loads(response.read().decode()).get("message", "")
                 if message:
                     success = message == "Token verified"
                     if not success: self.logger.error(f"Received error from driver backend: {message}")
