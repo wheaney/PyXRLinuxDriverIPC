@@ -111,7 +111,6 @@ class XRDriverIPC:
                         self.logger.error(f"Error parsing line {line}: {e}")
         except FileNotFoundError as e:
             self.logger.error(f"Config file not found {e}")
-            return config
 
         if include_ui_view: config['ui_view'] = self.build_ui_view(config)
 
