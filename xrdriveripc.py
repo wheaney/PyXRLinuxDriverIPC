@@ -12,7 +12,14 @@ CONTROL_FLAGS_FILE_PATH = '/dev/shm/xr_driver_control'
 # read-only file that the driver writes (but never reads) to with its current state
 DRIVER_STATE_FILE_PATH = '/dev/shm/xr_driver_state'
 
-CONTROL_FLAGS = ['recenter_screen', 'recalibrate', 'sbs_mode', 'refresh_device_license', 'enable_breezy_desktop_smooth_follow']
+CONTROL_FLAGS = [
+    'recenter_screen', 
+    'recalibrate', 
+    'sbs_mode', 
+    'refresh_device_license', 
+    'enable_breezy_desktop_smooth_follow',
+    'force_quit'
+]
 SBS_MODE_VALUES = ['unset', 'enable', 'disable']
 MANAGED_EXTERNAL_MODES = ['virtual_display', 'sideview', 'none']
 VR_LITE_OUTPUT_MODES = ['mouse', 'joystick']
