@@ -89,11 +89,12 @@ class XRDriverIPC:
 
         return XRDriverIPC._instance
 
-    def __init__(self, logger=Logger(), user_home=None):
+    def __init__(self, logger=Logger(), config_home=None):
         self.breezy_installed = False
         self.breezy_installing = False
-        self.user_home = user_home if user_home else os.path.expanduser("~")
-        self.config_file_path = os.path.join(self.user_home, ".xreal_driver_config")
+        if not config_home:
+            config_home = os.path.join(os.path.expanduser("~"), ".config")
+        self.config_file_path = os.path.join(config_home, "xr_driver", "config.ini")
         self.logger = logger
         self.request_context = ssl._create_unverified_context()
 
