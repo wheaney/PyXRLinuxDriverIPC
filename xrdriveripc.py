@@ -248,9 +248,11 @@ class XRDriverIPC:
         state['sbs_mode_enabled'] = False
         state['sbs_mode_supported'] = False
         state['firmware_update_recommended'] = False
-        state['device_license'] = {}
-        state['ui_view'] = {}
         state['breezy_desktop_smooth_follow_enabled'] = False
+        state['device_license'] = {}
+        state['ui_view'] = {
+            'driver_running': True
+        }
 
         try:
             with open(DRIVER_STATE_FILE_PATH, 'r') as f:
@@ -288,6 +290,7 @@ class XRDriverIPC:
 
         # state is stale, just send the ui_view
         if state['heartbeat'] == 0 or (time.time() - state['heartbeat']) > 5:
+            state['ui_view']['driver_running'] = False
             return {
                 'heartbeat': state['heartbeat'],
                 'hardware_id': state['hardware_id'],
