@@ -277,7 +277,7 @@ class XRDriverIPC:
                             state[key] = parse_int(value, 0)
                         elif key in ['hardware_id', 'calibration_setup', 'calibration_state', 'connected_device_brand', 'connected_device_model']:
                             state[key] = value
-                        elif key in ['sbs_mode_enabled', 'sbs_mode_supported', 'firmware_update_recommended', 'breezy_desktop_smooth_follow_enabled']:
+                        elif key in ['sbs_mode_enabled', 'sbs_mode_supported', 'firmware_update_recommended', 'breezy_desktop_smooth_follow_enabled', 'is_gamescope_reshade_ipc_connected']:
                             state[key] = parse_boolean(value, False)
                         elif key == 'device_license':
                             license_json = json.loads(value)
