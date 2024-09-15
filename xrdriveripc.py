@@ -18,7 +18,8 @@ CONTROL_FLAGS = [
     'sbs_mode', 
     'refresh_device_license', 
     'enable_breezy_desktop_smooth_follow',
-    'force_quit'
+    'force_quit',
+    'request_features'
 ]
 SBS_MODE_VALUES = ['unset', 'enable', 'disable']
 MANAGED_EXTERNAL_MODES = ['virtual_display', 'sideview', 'none']
@@ -53,6 +54,7 @@ CONFIG_PARSER_INDEX = 0
 CONFIG_DEFAULT_VALUE_INDEX = 1
 CONFIG_ENTRIES = {
     'disabled': [parse_boolean, True],
+    'gamescope_reshade_wayland_disabled': [parse_boolean, False],
     'output_mode': [parse_string, 'mouse'],
     'external_mode': [parse_array, ['none']],
     'mouse_sensitivity': [parse_int, 30],
@@ -65,7 +67,9 @@ CONFIG_ENTRIES = {
     'sideview_position': [parse_string, 'center'],
     'sideview_display_size': [parse_float, 1.0],
     'virtual_display_smooth_follow_enabled': [parse_boolean, False],
-    'sideview_smooth_follow_enabled': [parse_boolean, False]
+    'sideview_smooth_follow_enabled': [parse_boolean, False],
+    'sideview_follow_threshold': [parse_float, 0.5],
+    'curved_display': [parse_boolean, False],
 }
 
 class Logger:
@@ -227,8 +231,13 @@ class XRDriverIPC:
                         if value not in SBS_MODE_VALUES:
                             self.logger.error(f"Invalid value {value} for sbs_mode flag")
                             continue
+                    elif key == 'request_features':
+                        if not isinstance(value, list):
+                            self.logger.error(f"Invalid value {value} for request_features flag, expected list")
+                            continue
+                        value = ",".join(value)
                     elif not isinstance(value, bool):
-                        self.logger.error(f"Invalid value {value} for {key} flag")
+                        self.logger.error(f"Invalid value {value} for {key} flag, expected boolean")
                         continue
                     output += f'{key}={str(value).lower()}\n'
 
@@ -249,6 +258,7 @@ class XRDriverIPC:
         state['sbs_mode_supported'] = False
         state['firmware_update_recommended'] = False
         state['breezy_desktop_smooth_follow_enabled'] = False
+        state['is_gamescope_reshade_ipc_connected'] = False
         state['device_license'] = {}
         state['ui_view'] = {
             'driver_running': True
@@ -285,7 +295,6 @@ class XRDriverIPC:
                     except Exception as e:
                         self.logger.error(f"Error parsing key-value pair {key}={value}: {e}")
         except FileNotFoundError:
-            self.logger.error(f"Could not find state file at {DRIVER_STATE_FILE_PATH}")
             pass
 
         # state is stale, just send the ui_view
