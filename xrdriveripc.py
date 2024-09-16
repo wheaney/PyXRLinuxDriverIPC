@@ -198,6 +198,7 @@ class XRDriverIPC:
             # new_external_modes.append("sideview")
             new_external_modes = ["sideview"]
             config['output_mode'] = "external_only"
+            config['curved_display'] = False
             config['disabled'] = False
         else:
             config['output_mode'] = "external_only"
