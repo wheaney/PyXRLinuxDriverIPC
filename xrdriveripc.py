@@ -63,7 +63,7 @@ CONFIG_ENTRIES = {
     'sbs_display_size': [parse_float, 1.0],
     'sbs_display_distance': [parse_float, 1.0],
     'sbs_content': [parse_boolean, False],
-    'sbs_mode_stretched': [parse_boolean, False],
+    'sbs_mode_stretched': [parse_boolean, True],
     'sideview_position': [parse_string, 'center'],
     'sideview_display_size': [parse_float, 1.0],
     'virtual_display_smooth_follow_enabled': [parse_boolean, False],
@@ -142,6 +142,9 @@ class XRDriverIPC:
             if view:
                 config.update(self.headset_mode_to_config(view.get('headset_mode'), view.get('is_joystick_mode'), old_config.get('external_mode')))
 
+            if len(config['external_mode']) == 0:
+                config['external_mode'].append("none")
+
             for key, value in config.items():
                 if key != "updated":
                     if isinstance(value, bool):
@@ -202,9 +205,6 @@ class XRDriverIPC:
         else:
             config['output_mode'] = "external_only"
 
-        has_external_mode = len(new_external_modes) > 0
-        if not has_external_mode:
-            new_external_modes.append("none")
         config['external_mode'] = new_external_modes
 
         return config
