@@ -121,8 +121,8 @@ class XRDriverIPC:
                             config[key] = parser(value, default_val)
                     except Exception as e:
                         self.logger.error(f"Error parsing line {line}: {e}")
-        except FileNotFoundError as e:
-            self.logger.error(f"Config file not found {e}")
+        except FileNotFoundError:
+            pass
 
         if include_ui_view: config['ui_view'] = self.build_ui_view(config)
 
