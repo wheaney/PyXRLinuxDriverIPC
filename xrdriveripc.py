@@ -262,7 +262,8 @@ class XRDriverIPC:
                         continue
                     output += f'{key}={str(value).lower()}\n'
 
-            with open(CONTROL_FLAGS_FILE_PATH, 'w') as f:
+            fd = os.open(CONTROL_FLAGS_FILE_PATH, os.O_WRONLY | os.O_CREAT, 0o777)
+            with os.fdopen(fd, 'w') as f:
                 f.write(output)
         except Exception as e:
             self.logger.error(f"Error writing control flags {e}")
