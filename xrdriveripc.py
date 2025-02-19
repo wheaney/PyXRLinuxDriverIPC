@@ -78,6 +78,8 @@ CONFIG_ENTRIES = {
     'sideview_smooth_follow_enabled': [parse_boolean, False],
     'sideview_follow_threshold': [parse_float, 0.5],
     'curved_display': [parse_boolean, False],
+    'multi_tap_enabled': [parse_boolean, False],
+    'debug': [parse_array, ''],
 }
 
 STATE_ENTRIES = {
@@ -269,7 +271,9 @@ class XRDriverIPC:
             self.logger.error(f"Error writing control flags {e}")
 
     def build_state_ui_view(self, state):
-        ui_view = {}
+        ui_view = {
+            'driver_running': state['heartbeat'] != 0 and (time.time() - state['heartbeat']) < 5
+        }
 
         license_json = state.get('device_license')
         if license_json is not None:
@@ -285,9 +289,8 @@ class XRDriverIPC:
         return ui_view
 
     def retrieve_driver_state(self):
-        state = {
-            'driver_running': True
-        }
+        state = {}
+        
         for key, value in STATE_ENTRIES.items():
             state[key] = value[CONFIG_DEFAULT_VALUE_INDEX]
 
@@ -311,8 +314,7 @@ class XRDriverIPC:
         state['ui_view'] = self.build_state_ui_view(state)
 
         # state is stale, just send the ui_view
-        if state['heartbeat'] == 0 or (time.time() - state['heartbeat']) > 5:
-            state['ui_view']['driver_running'] = False
+        if not state['ui_view']['driver_running']:
             return {
                 'heartbeat': state['heartbeat'],
                 'hardware_id': state['hardware_id'],
