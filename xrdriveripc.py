@@ -15,6 +15,8 @@ DRIVER_STATE_FILE_PATH = '/dev/shm/xr_driver_state'
 CONTROL_FLAGS = [
     'recenter_screen', 
     'recalibrate', 
+    'calibrate_magnet',
+    'disable_magnet',
     'sbs_mode', 
     'refresh_device_license', 
     'enable_breezy_desktop_smooth_follow',
@@ -22,7 +24,7 @@ CONTROL_FLAGS = [
     'request_features'
 ]
 SBS_MODE_VALUES = ['unset', 'enable', 'disable']
-MANAGED_EXTERNAL_MODES = ['virtual_display', 'sideview', 'none']
+BASE_EXTERNAL_MODES = ['none']
 VR_LITE_OUTPUT_MODES = ['mouse', 'joystick']
 
 TOKENS_ENDPOINT="https://eu.driver-backend.xronlinux.com/tokens/v1"
@@ -49,6 +51,12 @@ def parse_string(value, default):
 def parse_array(value, default):
     return value.split(",") if value else default
 
+def parse_json_string(value, default):
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return default
+
 
 CONFIG_PARSER_INDEX = 0
 CONFIG_DEFAULT_VALUE_INDEX = 1
@@ -70,6 +78,28 @@ CONFIG_ENTRIES = {
     'sideview_smooth_follow_enabled': [parse_boolean, False],
     'sideview_follow_threshold': [parse_float, 0.5],
     'curved_display': [parse_boolean, False],
+    'multi_tap_enabled': [parse_boolean, False],
+    'debug': [parse_array, ''],
+}
+
+STATE_ENTRIES = {
+    'heartbeat': [parse_int, 0],
+    'hardware_id': [parse_string, None],
+    'connected_device_brand': [parse_string, None],
+    'connected_device_model': [parse_string, None],
+    'magnet_supported': [parse_boolean, False],
+    'magnet_calibration_type': [parse_string, 'UNSUPPORTED'],
+    'using_magnet': [parse_boolean, False],
+    'magnet_stale': [parse_boolean, False],
+    'magnet_calibrating': [parse_boolean, False],
+    'gyro_calibrating': [parse_boolean, False],
+    'accel_calibrating': [parse_boolean, False],
+    'sbs_mode_enabled': [parse_boolean, False],
+    'sbs_mode_supported': [parse_boolean, False],
+    'firmware_update_recommended': [parse_boolean, False],
+    'breezy_desktop_smooth_follow_enabled': [parse_boolean, False],
+    'is_gamescope_reshade_ipc_connected': [parse_boolean, False],
+    'device_license': [parse_json_string, None],
 }
 
 class Logger:
@@ -93,12 +123,13 @@ class XRDriverIPC:
 
         return XRDriverIPC._instance
 
-    def __init__(self, logger=Logger(), config_home=None):
+    def __init__(self, logger=Logger(), config_home=None, supported_output_modes=[]):
         self.breezy_installed = False
         self.breezy_installing = False
         if not config_home:
             config_home = os.path.join(os.path.expanduser("~"), ".config")
         self.config_file_path = os.path.join(config_home, "xr_driver", "config.ini")
+        self.supported_output_modes = supported_output_modes + BASE_EXTERNAL_MODES
         self.logger = logger
         self.request_context = ssl._create_unverified_context()
 
@@ -121,10 +152,10 @@ class XRDriverIPC:
                             config[key] = parser(value, default_val)
                     except Exception as e:
                         self.logger.error(f"Error parsing line {line}: {e}")
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             pass
 
-        if include_ui_view: config['ui_view'] = self.build_ui_view(config)
+        if include_ui_view: config['ui_view'] = self.build_config_ui_view(config)
 
         return config
 
@@ -132,14 +163,12 @@ class XRDriverIPC:
         try:
             output = ""
 
-            # Since the UI doesn't refresh the config before it updates, the external_mode can get out of sync with
-            # what's on disk. To avoid losing external_mode values, we retrieve the previous configs to preserve
-            # any non-managed external modes.
-            old_config = self.retrieve_config()
-
             # remove the UI's "view" data, translate back to config values, and merge them in
             view = config.pop('ui_view', None)
             if view:
+                # Retrieve the previous configs to preserve any external modes not specifically supported by the app using this library.
+                old_config = self.retrieve_config()
+
                 config.update(self.headset_mode_to_config(view.get('headset_mode'), view.get('is_joystick_mode'), old_config.get('external_mode')))
 
             if len(config['external_mode']) == 0:
@@ -166,7 +195,7 @@ class XRDriverIPC:
             os.replace(temp_file, self.config_file_path)
             os.chmod(self.config_file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH)
 
-            config['ui_view'] = self.build_ui_view(config)
+            config['ui_view'] = self.build_config_ui_view(config)
 
             return config
         except Exception as e:
@@ -174,33 +203,27 @@ class XRDriverIPC:
             raise e
 
     # like a SQL "view," these are computed values that are commonly used in the UI
-    def build_ui_view(self, config):
+    def build_config_ui_view(self, config):
         view = {}
         view['headset_mode'] = self.config_to_headset_mode(config)
         view['is_joystick_mode'] = config['output_mode'] == 'joystick'
         return view
 
     def filter_to_other_external_modes(self, external_modes):
-        return [mode for mode in external_modes if mode not in MANAGED_EXTERNAL_MODES]
+        return [mode for mode in external_modes if mode not in self.supported_output_modes]
 
     def headset_mode_to_config(self, headset_mode, joystick_mode, old_external_modes):
         new_external_modes = self.filter_to_other_external_modes(old_external_modes)
 
         config = {}
-        if headset_mode == "virtual_display":
+        if headset_mode in self.supported_output_modes:
             # TODO - uncomment this when the driver can support multiple external_mode values
-            # new_external_modes.append("virtual_display")
-            new_external_modes = ["virtual_display"]
+            # new_external_modes.append(headset_mode)
+            new_external_modes = [headset_mode]
             config['output_mode'] = "external_only"
             config['disabled'] = False
         elif headset_mode == "vr_lite":
             config['output_mode'] = "joystick" if joystick_mode else "mouse"
-            config['disabled'] = False
-        elif headset_mode == "sideview":
-            # TODO - uncomment this when the driver can support multiple external_mode values
-            # new_external_modes.append("sideview")
-            new_external_modes = ["sideview"]
-            config['output_mode'] = "external_only"
             config['disabled'] = False
         else:
             config['output_mode'] = "external_only"
@@ -216,9 +239,9 @@ class XRDriverIPC:
         if config['output_mode'] in VR_LITE_OUTPUT_MODES:
             return "vr_lite"
 
-        managed_mode = next((mode for mode in MANAGED_EXTERNAL_MODES if mode in config['external_mode']), None)
-        if managed_mode and managed_mode != "none":
-            return managed_mode
+        supported_mode = next((mode for mode in self.supported_output_modes if mode in config['external_mode']), None)
+        if supported_mode and supported_mode != "none":
+            return supported_mode
 
         return "disabled"
 
@@ -241,71 +264,64 @@ class XRDriverIPC:
                         continue
                     output += f'{key}={str(value).lower()}\n'
 
-            with open(CONTROL_FLAGS_FILE_PATH, 'w') as f:
+            fd = os.open(CONTROL_FLAGS_FILE_PATH, os.O_WRONLY | os.O_CREAT, 0o777)
+            with os.fdopen(fd, 'w') as f:
                 f.write(output)
         except Exception as e:
             self.logger.error(f"Error writing control flags {e}")
 
+    def build_state_ui_view(self, state):
+        ui_view = {
+            'driver_running': state['heartbeat'] != 0 and (time.time() - state['heartbeat']) < 5
+        }
+
+        license_json = state.get('device_license')
+        if license_json is not None:
+            license_view = {}
+            license_view['tiers'] = self._license_tiers_view(license_json)
+            license_view['features'] = self._license_features_view(license_json)
+            license_view['hardware_id'] = license_json['hardwareId']
+            license_view['confirmed_token'] = license_json.get('confirmedToken') == True
+            license_view['action_needed'] = self._license_action_needed_details(license_view)
+            license_view['enabled_features'] = self._license_enabled_features(license_view)
+            ui_view['license'] = license_view
+
+        return ui_view
+
     def retrieve_driver_state(self):
         state = {}
-        state['heartbeat'] = 0
-        state['hardware_id'] = None
-        state['connected_device_brand'] = None
-        state['connected_device_model'] = None
-        state['calibration_setup'] = "AUTOMATIC"
-        state['calibration_state'] = "NOT_CALIBRATED"
-        state['sbs_mode_enabled'] = False
-        state['sbs_mode_supported'] = False
-        state['firmware_update_recommended'] = False
-        state['breezy_desktop_smooth_follow_enabled'] = False
-        state['is_gamescope_reshade_ipc_connected'] = False
-        state['device_license'] = {}
-        state['ui_view'] = {
-            'driver_running': True
-        }
+        
+        for key, value in STATE_ENTRIES.items():
+            state[key] = value[CONFIG_DEFAULT_VALUE_INDEX]
 
         try:
             with open(DRIVER_STATE_FILE_PATH, 'r') as f:
-                output = f.read()
-                for line in output.splitlines():
+                for line in f:
                     try:
                         if not line.strip():
                             continue
 
                         key, value = line.strip().split('=')
-                        if key == 'heartbeat':
-                            state[key] = parse_int(value, 0)
-                        elif key in ['hardware_id', 'calibration_setup', 'calibration_state', 'connected_device_brand', 'connected_device_model']:
-                            state[key] = value
-                        elif key in ['sbs_mode_enabled', 'sbs_mode_supported', 'firmware_update_recommended', 'breezy_desktop_smooth_follow_enabled', 'is_gamescope_reshade_ipc_connected']:
-                            state[key] = parse_boolean(value, False)
-                        elif key == 'device_license':
-                            license_json = json.loads(value)
-                            state['device_license'] = license_json
-
-                            license_view = {}
-                            license_view['tiers'] = self._license_tiers_view(license_json)
-                            license_view['features'] = self._license_features_view(license_json)
-                            license_view['hardware_id'] = license_json['hardwareId']
-                            license_view['confirmed_token'] = license_json.get('confirmedToken') == True
-                            license_view['action_needed'] = self._license_action_needed_details(license_view)
-                            license_view['enabled_features'] = self._license_enabled_features(license_view)
-
-                            state['ui_view']['license'] = license_view
+                        if key in STATE_ENTRIES:
+                            parser = STATE_ENTRIES[key][CONFIG_PARSER_INDEX]
+                            default_val = STATE_ENTRIES[key][CONFIG_DEFAULT_VALUE_INDEX]
+                            state[key] = parser(value, default_val)
                     except Exception as e:
-                        self.logger.error(f"Error parsing key-value pair {key}={value}: {e}")
-        except FileNotFoundError:
+                        self.logger.error(f"Error parsing line {line}: {e}")
+        except FileNotFoundError as e:
             pass
 
+        state['ui_view'] = self.build_state_ui_view(state)
+
         # state is stale, just send the ui_view
-        if state['heartbeat'] == 0 or (time.time() - state['heartbeat']) > 5:
-            state['ui_view']['driver_running'] = False
+        if not state['ui_view']['driver_running']:
             return {
                 'heartbeat': state['heartbeat'],
                 'hardware_id': state['hardware_id'],
                 'device_license': state['device_license'],
                 'ui_view': state['ui_view']
             }
+        
 
         return state
 
