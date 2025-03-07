@@ -79,6 +79,9 @@ CONFIG_ENTRIES = {
     'sideview_follow_threshold': [parse_float, 0.5],
     'curved_display': [parse_boolean, False],
     'multi_tap_enabled': [parse_boolean, False],
+    'smooth_follow_track_roll': [parse_boolean, False],
+    'smooth_follow_track_pitch': [parse_boolean, True],
+    'smooth_follow_track_yaw': [parse_boolean, True],
     'debug': [parse_array, ''],
 }
 
