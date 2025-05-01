@@ -65,6 +65,8 @@ CONFIG_ENTRIES = {
     'gamescope_reshade_wayland_disabled': [parse_boolean, False],
     'output_mode': [parse_string, 'mouse'],
     'external_mode': [parse_array, ['none']],
+    'vr_lite_invert_x': [parse_boolean, False],
+    'vr_lite_invert_y': [parse_boolean, False],
     'mouse_sensitivity': [parse_int, 30],
     'display_zoom': [parse_float, 1.0],
     'look_ahead': [parse_int, 0],
