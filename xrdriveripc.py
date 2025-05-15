@@ -84,7 +84,7 @@ CONFIG_ENTRIES = {
     'smooth_follow_track_roll': [parse_boolean, False],
     'smooth_follow_track_pitch': [parse_boolean, True],
     'smooth_follow_track_yaw': [parse_boolean, True],
-    'debug': [parse_array, ''],
+    'debug': [parse_array, []],
 }
 
 STATE_ENTRIES = {
@@ -230,6 +230,8 @@ class XRDriverIPC:
         elif headset_mode == "vr_lite":
             config['output_mode'] = "joystick" if joystick_mode else "mouse"
             config['disabled'] = False
+        elif len(new_external_modes) == 0:
+            config["disabled"] = True
         else:
             config['output_mode'] = "external_only"
 
