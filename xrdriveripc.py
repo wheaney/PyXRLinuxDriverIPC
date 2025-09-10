@@ -211,7 +211,7 @@ class XRDriverIPC:
     def build_config_ui_view(self, config):
         view = {}
         view['headset_mode'] = self.config_to_headset_mode(config)
-        view['is_joystick_mode'] = config['output_mode'] == 'joystick'
+        view['is_joystick_mode'] = config.get('output_mode') == 'joystick'
         return view
 
     def filter_to_other_external_modes(self, external_modes):
