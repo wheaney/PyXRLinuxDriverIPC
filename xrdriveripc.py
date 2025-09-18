@@ -20,6 +20,9 @@ CONTROL_FLAGS = [
     'sbs_mode', 
     'refresh_device_license', 
     'enable_breezy_desktop_smooth_follow',
+    'toggle_breezy_desktop_smooth_follow',
+    'breezy_desktop_display_distance',
+    'breezy_desktop_follow_threshold',
     'force_quit',
     'request_features'
 ]
