@@ -269,9 +269,6 @@ class XRDriverIPC:
                             self.logger.error(f"Invalid value {value} for request_features flag, expected list")
                             continue
                         value = ",".join(value)
-                    elif not isinstance(value, bool):
-                        self.logger.error(f"Invalid value {value} for {key} flag, expected boolean")
-                        continue
                     output += f'{key}={str(value).lower()}\n'
 
             fd = os.open(CONTROL_FLAGS_FILE_PATH, os.O_WRONLY | os.O_CREAT, 0o777)
