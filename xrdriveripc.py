@@ -87,6 +87,8 @@ CONFIG_ENTRIES = {
     'smooth_follow_track_roll': [parse_boolean, False],
     'smooth_follow_track_pitch': [parse_boolean, True],
     'smooth_follow_track_yaw': [parse_boolean, True],
+    'neck_saver_horizontal_multiplier': [parse_float, 1.0],
+    'neck_saver_vertical_multiplier': [parse_float, 1.0],
     'debug': [parse_array, []],
 }
 
