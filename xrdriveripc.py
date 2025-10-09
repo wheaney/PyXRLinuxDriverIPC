@@ -92,7 +92,7 @@ CONFIG_ENTRIES = {
     'opentrack_app_ip': [parse_string, '127.0.0.1'],
     'opentrack_app_port': [parse_int, 4242],
     'opentrack_listener_enabled': [parse_boolean, False],
-    'opentrack_listen_ip': [parse_string, '127.0.0.1'],
+    'opentrack_listen_ip': [parse_string, '0.0.0.0'],
     'opentrack_listen_port': [parse_int, 4242],
     'debug': [parse_array, []],
 }
