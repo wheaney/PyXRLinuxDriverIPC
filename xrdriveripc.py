@@ -102,6 +102,8 @@ STATE_ENTRIES = {
     'hardware_id': [parse_string, None],
     'connected_device_brand': [parse_string, None],
     'connected_device_model': [parse_string, None],
+    'connected_device_full_distance_cm': [parse_float, 0.0],
+    'connected_device_full_size_cm': [parse_float, 0.0],
     'magnet_supported': [parse_boolean, False],
     'magnet_calibration_type': [parse_string, 'UNSUPPORTED'],
     'using_magnet': [parse_boolean, False],
