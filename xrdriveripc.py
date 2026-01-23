@@ -1,6 +1,7 @@
 import http
 import json
 import os
+import subprocess
 import ssl
 import stat
 import time
@@ -469,4 +470,24 @@ class XRDriverIPC:
             self.logger.error('hardware_id not found in driver state')
 
         return False
-
+    
+    def reset_driver(self, as_user=None):
+        try:
+            if as_user is not None:
+                output = subprocess.check_output(
+                    ['su', '-l', '-c', 'XDG_RUNTIME_DIR=/run/user/1000 systemctl --user restart xr-driver', as_user],
+                    stderr=subprocess.STDOUT
+                )
+            else:
+                output = subprocess.check_output(['systemctl', '--user', 'restart', 'xr-driver'], stderr=subprocess.STDOUT)
+            
+            if output:
+                output_text = output.decode(errors="replace").strip()
+                if output_text:
+                    self.logger.error(f"Unexpected output resetting the driver: {output_text}")
+                    return False
+        except subprocess.CalledProcessError as exc:
+            self.logger.error(f"Error resetting the driver: {exc.output}")
+            return False
+        
+        return True
