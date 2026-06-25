@@ -141,7 +141,7 @@ class XRDriverIPC:
 
         return XRDriverIPC._instance
 
-    def __init__(self, logger=Logger(), config_home=None, supported_output_modes=[]):
+    def __init__(self, logger=Logger(), config_home=None, supported_output_modes=[], tokens_endpoint=None, write_control_flags_hook=None):
         self.breezy_installed = False
         self.breezy_installing = False
         if not config_home:
@@ -150,6 +150,8 @@ class XRDriverIPC:
         self.supported_output_modes = supported_output_modes + BASE_EXTERNAL_MODES
         self.logger = logger
         self.request_context = ssl._create_unverified_context()
+        self.tokens_endpoint = tokens_endpoint or TOKENS_ENDPOINT
+        self.write_control_flags_hook = write_control_flags_hook
 
     def retrieve_config(self, include_ui_view = True):
         config = {}
@@ -266,7 +268,7 @@ class XRDriverIPC:
 
         return "disabled"
 
-    def write_control_flags(self, control_flags):
+    def _default_write_control_flags(self, control_flags):
         try:
             output = ""
             for key, value in control_flags.items():
@@ -287,6 +289,12 @@ class XRDriverIPC:
                 f.write(output)
         except Exception as e:
             self.logger.error(f"Error writing control flags {e}")
+
+    def write_control_flags(self, control_flags):
+        if self.write_control_flags_hook:
+            self.write_control_flags_hook(control_flags, self._default_write_control_flags)
+        else:
+            self._default_write_control_flags(control_flags)
 
     def build_state_ui_view(self, state):
         ui_view = {
@@ -428,11 +436,11 @@ class XRDriverIPC:
             requestbody = json.dumps({"hardwareId": state['hardware_id'], "email": email})
 
             try:
-                req = urllib.request.Request(TOKENS_ENDPOINT, method="POST", headers={"Content-Type": "application/json"}, data=requestbody.encode())
+                req = urllib.request.Request(self.tokens_endpoint, method="POST", headers={"Content-Type": "application/json"}, data=requestbody.encode())
                 response = urllib.request.urlopen(req, context=self.request_context)
                 if response.status not in [http.client.OK, http.client.BAD_REQUEST]:
                     raise Exception(f"Received status code {response.status}")
-                
+
                 message = json.loads(response.read().decode()).get("message", "")
                 if message:
                     success = message == "Token request sent"
@@ -455,11 +463,11 @@ class XRDriverIPC:
             requestbody = json.dumps({"hardwareId": state['hardware_id'], "token": token})
 
             try:
-                req = urllib.request.Request(TOKENS_ENDPOINT, method="PUT", headers={"Content-Type": "application/json"}, data=requestbody.encode())
+                req = urllib.request.Request(self.tokens_endpoint, method="PUT", headers={"Content-Type": "application/json"}, data=requestbody.encode())
                 response = urllib.request.urlopen(req, context=self.request_context)
                 if response.status not in [http.client.OK, http.client.BAD_REQUEST]:
                     raise Exception(f"Received status code {response.status}")
-                
+
                 message = json.loads(response.read().decode()).get("message", "")
                 if message:
                     success = message == "Token verified"
