@@ -61,6 +61,13 @@ def parse_json_string(value, default):
     except json.JSONDecodeError:
         return default
 
+def parse_sideview_position(value, default):
+    if not value or value == 'center':
+        # map legacy 'center' value to current, if present
+        return 'middle_center'
+
+    return value
+
 
 CONFIG_PARSER_INDEX = 0
 CONFIG_DEFAULT_VALUE_INDEX = 1
@@ -82,7 +89,7 @@ CONFIG_ENTRIES = {
     'display_distance': [parse_float, 1.0],
     'sbs_content': [parse_boolean, False],
     'sbs_mode_stretched': [parse_boolean, True],
-    'sideview_position': [parse_string, 'center'],
+    'sideview_position': [parse_sideview_position, None],
     'virtual_display_smooth_follow_enabled': [parse_boolean, False],
     'sideview_smooth_follow_enabled': [parse_boolean, False],
     'sideview_follow_threshold': [parse_float, 0.5],
