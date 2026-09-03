@@ -117,6 +117,7 @@ STATE_ENTRIES = {
     'connected_device_full_distance_cm': [parse_float, 0.0],
     'connected_device_full_size_cm': [parse_float, 0.0],
     'connected_device_pose_has_position': [parse_boolean, False],
+    'connected_device_possible_imu_misalignment': [parse_boolean, False],
     'magnet_supported': [parse_boolean, False],
     'magnet_calibration_type': [parse_string, 'UNSUPPORTED'],
     'using_magnet': [parse_boolean, False],
